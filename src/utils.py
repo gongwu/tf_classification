@@ -31,9 +31,8 @@ from collections import Counter
 import numpy as np
 import os
 import pickle
-
 import six
-
+import re
 
 def fn_timer(function):
     @wraps(function)
@@ -673,3 +672,35 @@ def ngram_match(sa, sb, n):
     ngb = make_ngram(sb, n)
     f1 = overlap_f1(nga, ngb)
     return f1
+
+
+# 对hashtag进行分词 e.g., #callmebaby -> call me baby
+class Segmenter:
+    def __words(self, text):
+        return re.findall("[a-z]+", text.lower())
+
+    def __wordProb(self, word):
+        return self.dictionary.get(word, 0) / self.total
+
+    def __init__(self, dictionary):
+        self.dictionary = pickle.load(open(dictionary))
+        self.maxWordLength = max(map(len, self.dictionary))
+        self.total = float(sum(self.dictionary.values()))
+
+    def get(self, text):
+        text = text.lower()
+        if text[0] == "#":
+            text = text[1:]
+        probs, lasts = [1.0], [0]
+        for i in range(1, len(text) + 1):
+            prob_k, k = max((probs[j] * self.__wordProb(text[j: i]), j) for j in range(max(0, i - self.maxWordLength), i))
+            probs.append(prob_k)
+            lasts.append(k)
+        words = []
+        i = len(text)
+        while 0 < i:
+            words.append(text[lasts[i]: i])
+            i = lasts[i]
+        words.reverse()
+        str_ = " ".join(words)
+        return str_

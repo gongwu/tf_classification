@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import re
+import itertools
+
 
 # def f(p=[]):
 #     p.append(1)
@@ -52,12 +54,22 @@ import re
 # char_lens = np.array(char_lens, dtype=np.int32)
 # print(char_lens)
 
-x = [[[1, 2, 3],
-      [4, 5, 6]],
-     [[7, 8, 9],
-      [10, 11, 12]]]
+# x = [[[1, 2, 3],
+#       [4, 5, 6]],
+#      [[7, 8, 9],
+#       [10, 11, 12]]]
+# with tf.Session() as sess:
+#     print(sess.run(tf.transpose(x, perm=[1, 2, 0])))
+#     print(sess.run(tf.transpose(x, perm=[1, 0, 2])))
+#     print(sess.run(tf.transpose(x, perm=[2, 1, 0])))
+#     print(sess.run(tf.transpose(x, perm=[2, 0, 1])))
+a = [[[1, 2, 3], [1, 2, 3]]]
+b = [[[1, 2, 3], [4, 5, 6]]]
+c = [[[1, 2, 3], [7, 8, 9]]]
+a = tf.constant(a)
+b = tf.constant(b)
+c = tf.constant(c)
 with tf.Session() as sess:
-    print(sess.run(tf.transpose(x, perm=[1, 2, 0])))
-    print(sess.run(tf.transpose(x, perm=[1, 0, 2])))
-    print(sess.run(tf.transpose(x, perm=[2, 1, 0])))
-    print(sess.run(tf.transpose(x, perm=[2, 0, 1])))
+    d = tf.concat([a, b, c], axis=-1)
+    print(sess.run(d))
+# print(list(itertools.chain(*list)))

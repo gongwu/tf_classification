@@ -31,7 +31,9 @@ tf.flags.DEFINE_float('drop_keep_rate', 0.9, 'dropout_keep_rate')
 tf.flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 tf.flags.DEFINE_float('lambda_l2', 0.0, 'lambda_l2')
 tf.flags.DEFINE_float('clipper', 30, 'clipper')
+tf.flags.DEFINE_bool('init', True, 'build_vocab')
 tf.flags.DEFINE_bool('with_char', True, 'char_embedding')
+tf.flags.DEFINE_bool('with_attention', True, 'word_attention')
 FLAGS._parse_flags()
 
 # Logger Part
@@ -40,7 +42,7 @@ logger.info(FLAGS.__flags)
 
 
 def main():
-    task = Task(init=True, FLAGS=FLAGS)
+    task = Task(init=FLAGS.init, FLAGS=FLAGS)
     FLAGS.we = task.embed
     FLAGS.char_we = task.char_embed
     if FLAGS.model == 'nbow':

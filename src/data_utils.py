@@ -3,9 +3,79 @@ import random
 import numpy as np
 import re, os
 import pickle
+import json
+import itertools
+import utils
+import config
+
 
 pad_word = '__PAD__'
 unk_word = '__UNK__'
+Segmenter = utils.Segmenter(config.VOCAB_NORMAL_WORDS_PATH)  # 对hashtag进行分词
+
+def load_tweets(file_path):
+    tweet_list = json.load(open(file_path, "r"), encoding="utf-8")
+    return tweet_list
+
+
+def get_text_unigram(microblog):
+    tokens = microblog["parsed_text"]["tokens"]  # clean_text做预处理得到的分词结果
+    ners = microblog["parsed_text"]["ners"]
+    wanted_tokens = _process_ngram_tokens(tokens, ners)  # 去掉各种number及长度小于2的词
+    return list(itertools.chain(*wanted_tokens))
+
+
+
+def _process_ngram_tokens(tokens, ners):
+    wanted_tokens = []
+    for sent_words, sent_ners in zip(tokens, ners):
+        wanted_sent_words = []
+        for word, ner in zip(sent_words, sent_ners):
+            # 去掉各种number
+            if ner in ["DATE", "NUMBER", "MONEY", "PERCENT"]:
+                continue
+            # 将包含数字和单词的token替换成NUMBER_WORD
+            if re.search("([0-9]*\.?[0-9]+)", word):
+                continue
+                # word = "NUMBER_WORD"
+            # 去掉hashtag变小写
+            # while word.startswith("#"):
+            #     word = word[1:].lower()
+            # 将hashtag去掉#，加入到句子中
+            tag = 0
+            while word.startswith("#"):
+                word = word[1:].lower()
+                tag = 1
+            if tag == 1:
+                if len(word) >= 2:
+                    token1 = []
+                    token2 = []
+                    token1 += Segmenter.get(word)  # 对hashtag进行分词
+                    for word_ in token1:
+                        if len(word_) >= 2:
+                            token2.append(word_)
+                    wanted_sent_words += token2
+                    continue
+                else:
+                    continue
+            # 去掉这些标点符号开头的token
+            tag = 0
+            punctuations = ["@", "'", ":", ";", "?", "!", "=", "_", "^", "*", "-", ".", "`"]
+            for punctuation in punctuations:
+                if word.startswith(punctuation):
+                    tag = 1
+                    break
+            if tag == 1:
+                continue
+            if word.strip() == "":
+                continue
+            # 去掉长度小于2的词
+            if len(word) < 2:
+                continue
+            word = word.lower()
+            wanted_sent_words.append(word)
+        wanted_tokens.append(wanted_sent_words)
+    return wanted_tokens
 
 
 def save_params(params, fname):

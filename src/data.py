@@ -8,25 +8,36 @@ import codecs
 import six
 import numpy as np
 np.random.seed(1234)
+# def read_data(file_list):
+#     """
+#     load data from file list
+#     Args: file_list:
+#     Returns:
+#     """
+    # if type(file_list) != list:
+    #     file_list = [file_list]
+    #
+    # examples = []
+    # for file in file_list:
+    #     with codecs.open(file, 'r', encoding='utf8') as f:
+    #         for line in f:
+    #             items = line.strip().split('\t')
+    #             label = items[0]
+    #             sent = items[1].split()
+    #             examples.append((sent, label))
+    # return examples
 
 
 def read_data(file_list):
-    """
-    load data from file list
-    Args: file_list:
-    Returns:
-    """
     if type(file_list) != list:
         file_list = [file_list]
-
     examples = []
     for file in file_list:
-        with codecs.open(file, 'r', encoding='utf8') as f:
-            for line in f:
-                items = line.strip().split('\t')
-                label = items[0]
-                sent = items[1].split()
-                examples.append((sent, label))
+        tweets = data_utils.load_tweets(file)
+        for tweet in tweets:
+            sents = data_utils.get_text_unigram(tweet)
+            label = tweet["label"]
+            examples.append((sents, label))
     return examples
 
 
@@ -179,6 +190,7 @@ class Task(object):
         for example in examples:
             sent = example[0]
             sents.append(sent)
+
         word_vocab = data_utils.build_word_vocab(sents)
         char_vocab = data_utils.build_char_vocab(sents)
 

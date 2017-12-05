@@ -16,9 +16,11 @@ max_word_len = 10
 ROOT = '../data/twitter_data'
 
 DATA_DIR = ROOT + '/word'
-train_file = DATA_DIR + '/train.txt'
-dev_file = DATA_DIR + '/dev.txt'
-test_file = DATA_DIR + '/test.txt'
+# train_file = DATA_DIR + '/train.txt'
+# dev_file = DATA_DIR + '/dev.txt'
+# test_file = DATA_DIR + '/test.txt'
+train_file = ROOT + "/processed/tweet_processed.json"
+dev_file = ROOT + "/processed/us_trial.json"
 word_embed_google = ROOT + '/embed/google_w2v.vocab.vector'
 word_embed_SWM = ROOT + '/embed/SWM.vocab.vector'
 word_dim = 300
@@ -29,8 +31,11 @@ MODEL_DIR = '../model'
 w2i_file = OUTPUT_DIR + '/w2i.p'
 c2i_file = OUTPUT_DIR + '/c2i.p'
 we_file = OUTPUT_DIR + '/we.p'
+
 dev_model_file = MODEL_DIR + '/dev_model'
-dev_predict_file = OUTPUT_DIR + '/dev-predicts_google.txt'
+dev_predict_file = OUTPUT_DIR + '/dev-predicts_SWM.txt'
 test_predict_file = OUTPUT_DIR + '/test-predicts.txt'
 
 SAVE_DIR = '../save'
+VOCABULARY_DIR = '../vocabulary'
+VOCAB_NORMAL_WORDS_PATH = VOCABULARY_DIR + '/normal_word.pkl'
