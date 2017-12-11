@@ -11,7 +11,7 @@ class ConfusionMatrix(object):
 
     For more information on confusion matrix en.wikipedia.org/wiki/Confusion_matrix"""
 
-    INIT_NUM_CLASSES = 100
+    INIT_NUM_CLASSES = 20
     def __init__(self, alphabet=None):
         if alphabet is None:
             self.alphabet = Alphabet()
@@ -19,7 +19,7 @@ class ConfusionMatrix(object):
         else:
             self.alphabet = alphabet
             num_classes = alphabet.size()
-            self.matrix = numpy.zeros((num_classes,num_classes))
+            self.matrix = numpy.zeros((num_classes, num_classes))
 
     def __iadd__(self, other):
         self.matrix += other.matrix
@@ -69,13 +69,12 @@ class ConfusionMatrix(object):
     def print_matrix(self):
         num_classes = self.alphabet.size()
         #header for the confusion matrix
-        header = [' '] + [self.alphabet.get_label(i) for i in range(num_classes)]
+        header = ['Pred\Gold'] + [str(i) for i in range(num_classes)]
         rows = []
         #putting labels to the first column of rhw matrix
         for i in range(num_classes):
-            row = [self.alphabet.get_label(i)] + [str(int(self.matrix[i,j])) for j in range(num_classes)]
+            row = [str(i)] + [str(int(self.matrix[i,j])) for j in range(num_classes)]
             rows.append(row)
-        print("row = predicted, column = truth")
         print(matrix_to_string(rows, header))
 
     def get_matrix(self):
@@ -117,8 +116,8 @@ class ConfusionMatrix(object):
                 f1[i] = 0
             correct += self.matrix[i,i]
             label = self.alphabet.get_label(i)
-            lines.append( '%s \tprecision %f \trecall %f\t F1 %f' %\
-                    (label, precision[i], recall[i], f1[i]))
+            lines.append( '%s \tprecision %f \trecall %f\t F1 %f \t%s' %\
+                    (i, precision[i], recall[i], f1[i], label))
         lines.append( '* Overall accuracy rate = %f' %(correct / sum(sum(self.matrix[:,:]))))
         lines.append( '* Macro precision %f \t recall %f\t F1 %f' %\
             (numpy.mean(precision), numpy.mean(recall), numpy.mean(f1)))
@@ -259,7 +258,7 @@ def matrix_to_string(matrix, header=None):
         header = tuple(header)
     lengths = []
     if header:
-        lengths = [len(column) for column in header]
+        lengths = [len(column)+5 for column in header]
 
     #finding the max length of each column
     for row in matrix:
