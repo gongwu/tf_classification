@@ -35,6 +35,7 @@ tf.flags.DEFINE_float('clipper', 30, 'clipper')
 tf.flags.DEFINE_bool('init', True, 'build_vocab')
 tf.flags.DEFINE_bool('with_char', True, 'char_embedding')
 tf.flags.DEFINE_bool('with_ner', True, 'ner_embedding')
+tf.flags.DEFINE_bool('with_pos', True, 'pos_embedding')
 tf.flags.DEFINE_bool('with_attention', True, 'word_attention')
 FLAGS._parse_flags()
 
@@ -48,6 +49,7 @@ def main():
     FLAGS.we = task.embed
     FLAGS.char_we = task.char_embed
     FLAGS.ner_we = task.ner_embed
+    FLAGS.pos_we = task.pos_embed
     if FLAGS.model == 'nbow':
         model = NBoWModel(FLAGS)
     elif FLAGS.model == 'lstm':
@@ -117,10 +119,10 @@ def main():
             if early_stop >= 5:
                 break
 
-
         with open(config.dev_predict_file, 'w') as f:
             for label in best_dev_result:
                 f.write(str(int(label))+"\n")
+
 
 if __name__ == '__main__':
     main()

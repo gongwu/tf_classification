@@ -23,6 +23,7 @@ class LSTMModel(object):
         self.layer_size = FLAGS.layer_size
         self.with_char = FLAGS.with_char
         self.with_ner = FLAGS.with_ner
+        self.with_pos = FLAGS.with_pos
         self.with_attention = FLAGS.with_attention
         self.drop_keep_rate = tf.placeholder(tf.float32)
         self.learning_rate = tf.placeholder(tf.float32)
@@ -36,6 +37,9 @@ class LSTMModel(object):
         if self.with_ner:
             self.input_x_ner = tf.placeholder(tf.int32, (None, self.seq_len))
             self.ner_we = tf.Variable(FLAGS.ner_we, name='ner_emb')
+        if self.with_pos:
+            self.input_x_pos = tf.placeholder(tf.int32, (None, self.seq_len))
+            self.pos_we = tf.Variable(FLAGS.pos_we, name='pos_emb')
         if self.with_char:
             self.input_x_char = tf.placeholder(tf.int32, (None, self.seq_len,
                                                           self.word_len))  # [batch_size, sent_len, word_len]
@@ -166,10 +170,13 @@ class LSTMModel(object):
                 char_x = tf.reshape(char_x, [batch_size, self.seq_len, self.char_lstm_size*2])
         if self.with_ner:
             embedded_x_ner = tf.nn.embedding_lookup(self.ner_we, self.input_x_ner)
-
+        if self.with_pos:
+            embedded_x_pos = tf.nn.embedding_lookup(self.pos_we, self.input_x_pos)
         with tf.variable_scope("seq_bilstm") as s:
             if self.with_ner:
                 embedded_x = tf.concat([embedded_x, embedded_x_ner], axis=-1)
+            if self.with_pos:
+                embedded_x = tf.concat([embedded_x, embedded_x_pos], axis=-1)
             if self.with_char:
                 embedded_x = tf.concat([embedded_x, char_x], axis=-1)
             lstm_x = BiLSTM(embedded_x, self.input_x_len, self.lstm_size, self.layer_size, self.drop_keep_rate,
@@ -225,6 +232,8 @@ class LSTMModel(object):
             feed_dict[self.input_x_char_len] = batch.char_len
         if self.with_ner:
             feed_dict[self.input_x_ner] = batch.ner
+        if self.with_pos:
+            feed_dict[self.input_x_pos] = batch.pos
         to_return = {
             'train_op': self.train_op,
             'loss': self.loss,
@@ -243,6 +252,8 @@ class LSTMModel(object):
             feed_dict[self.input_x_char_len] = batch.char_len
         if self.with_ner:
             feed_dict[self.input_x_ner] = batch.ner
+        if self.with_pos:
+            feed_dict[self.input_x_pos] = batch.pos
         to_return = {
             'predict_label': self.predict_label,
             'predict_prob': self.predict_prob

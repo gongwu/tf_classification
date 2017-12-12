@@ -13,6 +13,7 @@ pad_word = '__PAD__'
 unk_word = '__UNK__'
 Segmenter = utils.Segmenter(config.VOCAB_NORMAL_WORDS_PATH)  # 对hashtag进行分词
 
+
 def load_tweets(file_path):
     tweet_list = json.load(open(file_path, "r"), encoding="utf-8")
     return tweet_list
@@ -30,9 +31,11 @@ def get_text_unigram(microblog):
     wanted_tokens = _process_ngram_tokens(tokens, ners)  # 去掉各种number及长度小于2的词
     return list(itertools.chain(*wanted_tokens))
 
+
 def get_text_ner(microblog):
     ners = microblog["parsed_text"]["ners"]
     return list(itertools.chain(*ners))  # 将多个list拼为1个list
+
 
 def get_text_pos(microblog):
     poss = microblog["parsed_text"]["pos"]
@@ -47,6 +50,7 @@ def removeItemsInDict(dict, threshold=1):
             if dict[key] < threshold:
                 dict.pop(key)
     return dict
+
 
 def _process_ngram_tokens(tokens, ners):
     wanted_tokens = []
@@ -196,6 +200,21 @@ def ner_to_index(ners, ner_vocab):
     return ner_index
 
 
+def pos_to_index(poses, pos_vocab):
+    """
+    :param sent:
+    :param pos_vocab:
+    :return:
+    """
+    pos_index = []
+    for pos in poses:
+        if pos not in poses:
+            pos_index.append(pos_vocab[unk_word])
+        else:
+            pos_index.append(pos_vocab[pos])
+    return pos_index
+
+
 def char_to_matrix(sent, char_vocab):
     """
     :param sent
@@ -294,12 +313,13 @@ def build_word_vocab(sents, threshold=1):
     print(len(dictionary))
     dictionary = removeItemsInDict(dictionary, threshold)
     print(len(dictionary))
-    words_vocab = {str(key): index+2  for index, key in enumerate(sorted(dictionary.keys()))}
+    words_vocab = {str(key): index + 2 for index, key in enumerate(sorted(dictionary.keys()))}
     # words_vocab = {word: index+2 for index, word in enumerate(words)}
     words_vocab[pad_word] = 0
     words_vocab[unk_word] = 1
     # words_vocab = removeItemsInDict(words_vocab, threshold)
     return words_vocab
+
 
 def build_ner_vocab(ners):
     """
@@ -311,6 +331,18 @@ def build_ner_vocab(ners):
         ner_set.update(ner)
     ners_vocab = {ner: index + 2 for index, ner in enumerate(ner_set)}
     return ners_vocab
+
+
+def build_pos_vocab(poses):
+    """
+   :param ners:
+   :return: ner2index
+   """
+    pos_set = set()
+    for pos in poses:
+        pos_set.update(pos)
+    pos_vocab = {pos: index + 2 for index, pos in enumerate(pos_set)}
+    return pos_vocab
 
 
 def build_char_vocab(sents):

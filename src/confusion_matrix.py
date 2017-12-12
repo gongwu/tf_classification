@@ -234,7 +234,6 @@ class ConfusionMatrix(object):
     #     print('\n'.join(lines))
 
 
-
 def matrix_to_string(matrix, header=None):
     """
     Return a pretty, aligned string representation of a nxm matrix.

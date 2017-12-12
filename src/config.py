@@ -27,16 +27,18 @@ word_embed_w2v = ROOT + '/embed/word2vec_300.vec'
 word_dim = 300
 char_dim = 50
 ner_dim = 50
+pos_dim = 50
 
 OUTPUT_DIR = '../output'
 MODEL_DIR = '../model'
 w2i_file = OUTPUT_DIR + '/w2i.p'
 c2i_file = OUTPUT_DIR + '/c2i.p'
-n2i_file = OUTPUT_DIR + 'n2i.p'
+n2i_file = OUTPUT_DIR + '/n2i.p'
+p2i_file = OUTPUT_DIR + '/p2i.p'
 we_file = OUTPUT_DIR + '/we.p'
 
 dev_model_file = MODEL_DIR + '/dev_model'
-dev_predict_file = OUTPUT_DIR + '/dev-predicts_08.txt'
+dev_predict_file = OUTPUT_DIR + '/dev-predicts_09.txt'
 test_predict_file = OUTPUT_DIR + '/test-predicts.txt'
 dev_gold_file =  DATA_DIR + '/dev_gold_file.txt'
 train_data_file = OUTPUT_DIR + '/train_data.txt'
