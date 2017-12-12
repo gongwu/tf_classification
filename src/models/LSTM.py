@@ -18,10 +18,11 @@ class LSTMModel(object):
         self.word_embed_size = config.word_dim
         self.char_embed_size = config.char_dim
         self.num_class = config.num_class
-        self.char_lstm_size = 200
-        self.lstm_size = 500
+        self.char_lstm_size = 50
+        self.lstm_size = 512
         self.layer_size = FLAGS.layer_size
         self.with_char = FLAGS.with_char
+        self.with_ner = FLAGS.with_ner
         self.with_attention = FLAGS.with_attention
         self.drop_keep_rate = tf.placeholder(tf.float32)
         self.learning_rate = tf.placeholder(tf.float32)
@@ -29,16 +30,19 @@ class LSTMModel(object):
         # Add PlaceHolder
         self.input_x = tf.placeholder(tf.int32, (None, self.seq_len))  # [batch_size, sent_len]
         self.input_x_len = tf.placeholder(tf.int32, (None,))  # [batch_len]
-
+        self.input_y = tf.placeholder(tf.int32, (None, self.num_class))  # [batch_size, label_size]
+        # Add Word Embedding
+        self.we = tf.Variable(FLAGS.we, name='emb')
+        if self.with_ner:
+            self.input_x_ner = tf.placeholder(tf.int32, (None, self.seq_len))
+            self.ner_we = tf.Variable(FLAGS.ner_we, name='ner_emb')
         if self.with_char:
             self.input_x_char = tf.placeholder(tf.int32, (None, self.seq_len,
                                                           self.word_len))  # [batch_size, sent_len, word_len]
             self.input_x_char_len = tf.placeholder(tf.int32, (None, self.seq_len))  # [batch_size, sen_len]
             # The Char Embedding is Random Initialization
             self.char_we = tf.Variable(FLAGS.char_we, name='char_emb')
-        self.input_y = tf.placeholder(tf.int32, (None, self.num_class))  # [batch_size, label_size]
-        # Add Word Embedding
-        self.we = tf.Variable(FLAGS.we, name='emb')
+
 
         # attention process:
         # 1.get logits for each word in the sentence.
@@ -160,19 +164,21 @@ class LSTMModel(object):
                 char_x = BiLSTM(embedded_x_char, input_x_char_lens, self.char_lstm_size, dropout_rate=1.0, return_sequence=True)
                 char_x = char_x[:, -1, :]
                 char_x = tf.reshape(char_x, [batch_size, self.seq_len, self.char_lstm_size*2])
+        if self.with_ner:
+            embedded_x_ner = tf.nn.embedding_lookup(self.ner_we, self.input_x_ner)
 
         with tf.variable_scope("seq_bilstm") as s:
+            if self.with_ner:
+                embedded_x = tf.concat([embedded_x, embedded_x_ner], axis=-1)
             if self.with_char:
-                word_distribution = tf.concat([embedded_x, char_x], axis=-1)
-            else:
-                word_distribution = embedded_x
-            lstm_x = BiLSTM(word_distribution, self.input_x_len, self.lstm_size, self.layer_size, self.drop_keep_rate,
+                embedded_x = tf.concat([embedded_x, char_x], axis=-1)
+            lstm_x = BiLSTM(embedded_x, self.input_x_len, self.lstm_size, self.layer_size, self.drop_keep_rate,
                             return_sequence=True)
         avg_pooling = tf_utils.AvgPooling(lstm_x, self.input_x_len, self.seq_len)
         max_pooling = tf_utils.MaxPooling(lstm_x, self.input_x_len)
         if self.with_attention:
             attention = attention_word_level(lstm_x, self.lstm_size, self.seq_len)
-            seq_distribution = tf.concat([avg_pooling, max_pooling, attention], axis=-1)
+            seq_distribution = attention
         else:
             seq_distribution = tf.concat([avg_pooling, max_pooling], axis=-1)
         logits = tf_utils.linear(seq_distribution, self.num_class, bias=True, scope='softmax')
@@ -195,7 +201,7 @@ class LSTMModel(object):
         if FLAGS.clipper:
             tvars = tf.trainable_variables()
             grads, _ = tf.clip_by_global_norm(tf.gradients(loss, tvars), FLAGS.clipper)
-            train_op = optimizer.apply_gradients(list(zip(grads, tvars)))
+            train_op = optimizer.apply_gradients(list(zip(grads, tvars)), global_step=global_step)
         else:
             train_op = optimizer.minimize(loss, global_step=global_step)
 
@@ -217,6 +223,8 @@ class LSTMModel(object):
         if self.with_char:
             feed_dict[self.input_x_char] = batch.char
             feed_dict[self.input_x_char_len] = batch.char_len
+        if self.with_ner:
+            feed_dict[self.input_x_ner] = batch.ner
         to_return = {
             'train_op': self.train_op,
             'loss': self.loss,
@@ -233,6 +241,8 @@ class LSTMModel(object):
         if self.with_char:
             feed_dict[self.input_x_char] = batch.char
             feed_dict[self.input_x_char_len] = batch.char_len
+        if self.with_ner:
+            feed_dict[self.input_x_ner] = batch.ner
         to_return = {
             'predict_label': self.predict_label,
             'predict_prob': self.predict_prob

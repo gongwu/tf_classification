@@ -18,13 +18,35 @@ def load_tweets(file_path):
     return tweet_list
 
 
+def set_dict_key_value(dict, key):
+    if key not in dict:
+        dict[key] = 0
+    dict[key] += 1
+
+
 def get_text_unigram(microblog):
     tokens = microblog["parsed_text"]["tokens"]  # clean_text做预处理得到的分词结果
     ners = microblog["parsed_text"]["ners"]
     wanted_tokens = _process_ngram_tokens(tokens, ners)  # 去掉各种number及长度小于2的词
     return list(itertools.chain(*wanted_tokens))
 
+def get_text_ner(microblog):
+    ners = microblog["parsed_text"]["ners"]
+    return list(itertools.chain(*ners))  # 将多个list拼为1个list
 
+def get_text_pos(microblog):
+    poss = microblog["parsed_text"]["pos"]
+    return list(itertools.chain(*poss))  # 将多个list拼为1个list
+
+
+def removeItemsInDict(dict, threshold=1):
+    if threshold > 1:
+        for key in list(dict.keys()):
+            if key == pad_word or key == unk_word:
+                continue
+            if dict[key] < threshold:
+                dict.pop(key)
+    return dict
 
 def _process_ngram_tokens(tokens, ners):
     wanted_tokens = []
@@ -32,8 +54,8 @@ def _process_ngram_tokens(tokens, ners):
         wanted_sent_words = []
         for word, ner in zip(sent_words, sent_ners):
             # 去掉各种number
-            if ner in ["DATE", "NUMBER", "MONEY", "PERCENT"]:
-                continue
+            # if ner in ["DATE", "NUMBER", "MONEY", "PERCENT"]:
+            #     continue
             # 将包含数字和单词的token替换成NUMBER_WORD
             if re.search("([0-9]*\.?[0-9]+)", word):
                 continue
@@ -70,8 +92,8 @@ def _process_ngram_tokens(tokens, ners):
             if word.strip() == "":
                 continue
             # 去掉长度小于2的词
-            if len(word) < 2:
-                continue
+            # if len(word) < 2:
+            #     continue
             word = word.lower()
             wanted_sent_words.append(word)
         wanted_tokens.append(wanted_sent_words)
@@ -146,7 +168,6 @@ def onehot_vectorize(label, num_class):
 
 def sent_to_index(sent, word_vocab):
     """
-
     :param sent:
     :param word_vocab:
     :return:
@@ -160,9 +181,23 @@ def sent_to_index(sent, word_vocab):
     return sent_index
 
 
+def ner_to_index(ners, ner_vocab):
+    """
+    :param sent:
+    :param ner_vocab:
+    :return:
+    """
+    ner_index = []
+    for ner in ners:
+        if ner not in ner_vocab:
+            ner_index.append(ner_vocab[unk_word])
+        else:
+            ner_index.append(ner_vocab[ner])
+    return ner_index
+
+
 def char_to_matrix(sent, char_vocab):
     """
-
     :param sent
     :param char_vocab
     :return:
@@ -244,24 +279,42 @@ def pad_3d_tensor(batch_chars, max_sent_length=None, max_word_length=None, dtype
     return padding_chars
 
 
-def build_word_vocab(sents):
+def build_word_vocab(sents, threshold=1):
     """
-
     :param sents:
     :return: word2index
     """
-    words = set()
+    dictionary = {}
     for sent in sents:
-        words.update(sent)
-    words_vocab = {word: index+2 for index, word in enumerate(words)}
+        for word in sent:
+            if word not in dictionary:
+                dictionary[word] = 0
+            dictionary[word] += 1
+    print(len(sents))
+    print(len(dictionary))
+    dictionary = removeItemsInDict(dictionary, threshold)
+    print(len(dictionary))
+    words_vocab = {str(key): index+2  for index, key in enumerate(sorted(dictionary.keys()))}
+    # words_vocab = {word: index+2 for index, word in enumerate(words)}
     words_vocab[pad_word] = 0
     words_vocab[unk_word] = 1
+    # words_vocab = removeItemsInDict(words_vocab, threshold)
     return words_vocab
+
+def build_ner_vocab(ners):
+    """
+   :param ners:
+   :return: ner2index
+   """
+    ner_set = set()
+    for ner in ners:
+        ner_set.update(ner)
+    ners_vocab = {ner: index + 2 for index, ner in enumerate(ner_set)}
+    return ners_vocab
 
 
 def build_char_vocab(sents):
     """
-
     :param sents:
     :return: char2index
     """
