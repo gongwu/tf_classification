@@ -18,12 +18,17 @@ class LSTMModel(object):
         self.word_embed_size = config.word_dim
         self.char_embed_size = config.char_dim
         self.num_class = config.num_class
+        self.num_vocab = FLAGS.num_vocab
         self.char_lstm_size = 50
         self.lstm_size = 512
+        self.mlp_h1_size = 512
         self.layer_size = FLAGS.layer_size
         self.with_char = FLAGS.with_char
         self.with_ner = FLAGS.with_ner
         self.with_pos = FLAGS.with_pos
+        self.with_rf = FLAGS.with_rf
+        self.with_pun = FLAGS.with_pun
+        self.with_senti = FLAGS.with_senti
         self.with_attention = FLAGS.with_attention
         self.drop_keep_rate = tf.placeholder(tf.float32)
         self.learning_rate = tf.placeholder(tf.float32)
@@ -40,6 +45,12 @@ class LSTMModel(object):
         if self.with_pos:
             self.input_x_pos = tf.placeholder(tf.int32, (None, self.seq_len))
             self.pos_we = tf.Variable(FLAGS.pos_we, name='pos_emb')
+        if self.with_rf:
+            self.input_rf = tf.placeholder(tf.float32, (None, self.num_vocab))
+        if self.with_pun:
+            self.input_x_pun = tf.placeholder(tf.float32, (None, 9))
+        if self.with_senti:
+            self.input_x_senti = tf.placeholder(tf.float32, (None, 110))
         if self.with_char:
             self.input_x_char = tf.placeholder(tf.int32, (None, self.seq_len,
                                                           self.word_len))  # [batch_size, sent_len, word_len]
@@ -183,12 +194,20 @@ class LSTMModel(object):
                             return_sequence=True)
         avg_pooling = tf_utils.AvgPooling(lstm_x, self.input_x_len, self.seq_len)
         max_pooling = tf_utils.MaxPooling(lstm_x, self.input_x_len)
+        last_lstm = lstm_x[:, -1, :]
+        last_lstm = tf.reshape(last_lstm, [batch_size, self.lstm_size * 2])
+        seq_distribution = tf.concat([avg_pooling, max_pooling, last_lstm], axis=-1)
         if self.with_attention:
             attention = attention_word_level(lstm_x, self.lstm_size, self.seq_len)
-            seq_distribution = attention
-        else:
-            seq_distribution = tf.concat([avg_pooling, max_pooling], axis=-1)
-        logits = tf_utils.linear(seq_distribution, self.num_class, bias=True, scope='softmax')
+            seq_distribution = tf.concat([last_lstm, attention], axis=-1)
+        if self.with_rf:
+            seq_distribution = tf.concat([seq_distribution, self.input_rf], axis=-1)
+        if self.with_pun:
+            seq_distribution = tf.concat([seq_distribution, self.input_x_pun], axis=-1)
+        if self.with_senti:
+            seq_distribution = tf.concat([seq_distribution, self.input_x_senti], axis=-1)
+        hidden = tf_utils.linear(seq_distribution, self.mlp_h1_size, bias=True, scope='relu')
+        logits = tf_utils.linear(hidden, self.num_class, bias=True, scope='softmax')
 
         # Obtain the Predict, Loss, Train_op
         predict_prob = tf.nn.softmax(logits, name='predict_prob')
@@ -234,6 +253,12 @@ class LSTMModel(object):
             feed_dict[self.input_x_ner] = batch.ner
         if self.with_pos:
             feed_dict[self.input_x_pos] = batch.pos
+        if self.with_rf:
+            feed_dict[self.input_rf] = batch.rf
+        if self.with_pun:
+            feed_dict[self.input_x_pun] = batch.pun
+        if self.with_senti:
+            feed_dict[self.input_x_senti] = batch.senti
         to_return = {
             'train_op': self.train_op,
             'loss': self.loss,
@@ -254,6 +279,12 @@ class LSTMModel(object):
             feed_dict[self.input_x_ner] = batch.ner
         if self.with_pos:
             feed_dict[self.input_x_pos] = batch.pos
+        if self.with_rf:
+            feed_dict[self.input_rf] = batch.rf
+        if self.with_pun:
+            feed_dict[self.input_x_pun] = batch.pun
+        if self.with_senti:
+            feed_dict[self.input_x_senti] = batch.senti
         to_return = {
             'predict_label': self.predict_label,
             'predict_prob': self.predict_prob

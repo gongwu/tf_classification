@@ -36,6 +36,9 @@ tf.flags.DEFINE_bool('init', True, 'build_vocab')
 tf.flags.DEFINE_bool('with_char', True, 'char_embedding')
 tf.flags.DEFINE_bool('with_ner', True, 'ner_embedding')
 tf.flags.DEFINE_bool('with_pos', True, 'pos_embedding')
+tf.flags.DEFINE_bool('with_rf', True, 'rf_features')
+tf.flags.DEFINE_bool('with_pun', True, 'punction_features')
+tf.flags.DEFINE_bool('with_senti', True, 'sentilexi')
 tf.flags.DEFINE_bool('with_attention', True, 'word_attention')
 FLAGS._parse_flags()
 
@@ -50,6 +53,7 @@ def main():
     FLAGS.char_we = task.char_embed
     FLAGS.ner_we = task.ner_embed
     FLAGS.pos_we = task.pos_embed
+    FLAGS.num_vocab = task.train_data.num_vocab
     if FLAGS.model == 'nbow':
         model = NBoWModel(FLAGS)
     elif FLAGS.model == 'lstm':

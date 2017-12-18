@@ -7,11 +7,15 @@ import json
 import itertools
 import utils
 import config
+import nltk
+from dict_loader import Dict_loader
 
 
 pad_word = '__PAD__'
 unk_word = '__UNK__'
 Segmenter = utils.Segmenter(config.VOCAB_NORMAL_WORDS_PATH)  # 对hashtag进行分词
+set_neg = set([t.strip() for t in open(config.NEGATION_PATH)])
+punc = set([".", ",", "?", "!", "...", ";"])
 
 
 def load_tweets(file_path):
@@ -32,6 +36,19 @@ def get_text_unigram(microblog):
     return list(itertools.chain(*wanted_tokens))
 
 
+def load_key_value_dict_from_file(dict_file_path):
+    dict = {}
+    dict_file = open(dict_file_path)
+    lines = [line.strip() for line in dict_file]
+    dict_file.close()
+    for line in lines:
+        if line == "":
+            continue
+        key, value = line.split("\t")
+        dict[key] = eval(value)
+    return dict
+
+
 def get_text_ner(microblog):
     ners = microblog["parsed_text"]["ners"]
     return list(itertools.chain(*ners))  # 将多个list拼为1个list
@@ -40,6 +57,216 @@ def get_text_ner(microblog):
 def get_text_pos(microblog):
     poss = microblog["parsed_text"]["pos"]
     return list(itertools.chain(*poss))  # 将多个list拼为1个list
+
+
+# 是否包含！，是否包含多个！，是否包含？，是否包含多个？，是否包含？！或！？
+# 最后一个token中是否包含！，最后一个token中是否包含？，！的个数，？的个数
+def get_text_punction(microblog):
+    has_exclamation = 0
+    has_several_exclamation = 0
+    has_question = 0
+    has_several_question = 0
+    has_exclamation_question = 0
+    end_exclamation = 0
+    end_question = 0
+    num_exclamation = 0
+    num_question = 0
+    # print microblog["parsed_text"]["tokens"]
+    if microblog["parsed_text"]["tokens"]:
+        tokens = []  # 本句子的所有tokens
+        token_lists = microblog["parsed_text"]["tokens"]
+        for token_list in token_lists:
+            for word in token_list:
+                tokens.append(word)
+            if "!" in tokens[-1]:
+                end_exclamation = 1
+            if "?" in tokens[-1]:
+                end_question = 1
+        sentence = " ".join(tokens)
+        # print tokens
+        exclamation_list = re.findall("!", sentence)
+        num_exclamation = len(exclamation_list)
+        if len(exclamation_list) != 0:  # 无感叹号
+            has_exclamation = 1
+            if len(exclamation_list) > 2:
+                has_several_exclamation = 1
+
+        question_list = re.findall("\?", sentence)
+        num_question = len(question_list)
+        if len(question_list) != 0:
+            has_question = 1
+            if len(question_list) > 2:
+                has_several_question = 1
+
+        excla_ques_list = re.findall("!\?", sentence)
+        ques_excla_list = re.findall("\?!", sentence)
+        if excla_ques_list or ques_excla_list:
+            has_exclamation_question = 1
+        if "!" in tokens[-1]:
+            end_exclamation = 1
+        if "?" in tokens[-1]:
+            end_question = 1
+    feature = [has_exclamation, has_several_exclamation, has_question, has_several_question, has_exclamation_question]
+    feature.append(end_exclamation)
+    feature.append(end_question)
+    feature.append(num_exclamation)
+    feature.append(num_question)
+    return feature
+
+
+def sentilexi(microblog):
+    feature = []
+    # dict的value值都是1维score（若字典中本来有pos_score和neg_score，则pos_score-neg_score）
+    Lexicon_dict_list = [
+        Dict_loader().dict_BL,
+        Dict_loader().dict_GI,
+        Dict_loader().dict_IMDB,
+        Dict_loader().dict_MPQA,
+        Dict_loader().dict_NRCE,
+        Dict_loader().dict_AF,
+        Dict_loader().dict_NRC140_U,
+        Dict_loader().dict_NRCH_U
+    ]
+
+    # tokens = list(itertools.chain(*
+    # 将否定词后的4个词加上_NEG后缀
+    tokens = reverse_neg(microblog)
+
+    for Lexicon in Lexicon_dict_list:
+        score = []
+        for word in tokens:
+            flag = -0.8 if word.endswith("_NEG") else 1
+            word = word.replace("_NEG", "")
+            if word in Lexicon:
+                score.append(Lexicon[word] * flag)
+
+        if len(score) == 0:
+            feature += [0] * 11
+            continue
+
+        countPos, countNeg, countNeu = 0, 0, 0
+        length = len(score) * 1.0
+        for s in score:
+            if s > 0.49:
+                countPos += 1
+            elif s < -0.49:
+                countNeg += 1
+            else:
+                countNeu += 1
+
+        feature += [countPos, countNeg, countNeu, countPos / length, countNeg / length, countNeu / length, max(score),
+                    min(score)]
+
+        finalscore = sum(score)
+        # feature.append(finalscore)
+        if finalscore > 0:
+            feature += [1, 0]
+        elif finalscore < 0:
+            feature += [0, 1]
+        else:
+            feature += [0, 0]
+
+        # pos_score = [t for t in score if t > 0]
+        # neg_score = [t for t in score if t < 0]
+        # feature.append(sum(pos_score))
+        # feature.append(sum(neg_score))
+
+        # if pos_score:
+        #     feature.append(pos_score[-1])
+        # else:
+        #     feature.append(0)
+        # if neg_score:
+        #     feature.append(neg_score[-1])
+        # else:
+        #     feature.append(0)
+
+        word = tokens[-1]
+        flag = -0.8 if word.endswith("_NEG") else 1
+        word = word.replace("_NEG", "")
+        if word in Lexicon:
+            feature.append(Lexicon[word] * flag)
+        else:
+            feature.append(0)
+
+    # Bigram Lexicons
+    for Lexicon in [Dict_loader().dict_NRC140_B, Dict_loader().dict_NRCH_B]:
+        score = []
+        bigram = list(nltk.ngrams(tokens, 2))
+        for index, bi in enumerate(bigram):
+            flag = -0.8 if bi[0].endswith("_NEG") and bi[1].endswith("_NEG") else 1
+            bi = (bi[0].replace("_NEG", ""), bi[1].replace("_NEG", ""))
+            bigram[index] = bi
+            if bi in Lexicon:
+                score.append(Lexicon[bi] * flag)
+        if not score:
+            feature += [0] * 11
+            continue
+
+        countPos, countNeg, countNeu = 0, 0, 0
+        length = len(score) * 1.0
+        for s in score:
+            if s > 0.49:
+                countPos += 1
+            elif s < -0.49:
+                countNeg += 1
+            else:
+                countNeu += 1
+
+        feature += [countPos, countNeg, countNeu, countPos / length, countNeg / length, countNeu / length, max(score),
+                    min(score)]
+
+        finalscore = sum(score)
+        # feature.append(finalscore)
+        if finalscore > 0:
+            feature += [1, 0]
+        elif finalscore < 0:
+            feature += [0, 1]
+        else:
+            feature += [0, 0]
+
+        pos_score = [t for t in score if t > 0]
+        neg_score = [t for t in score if t < 0]
+        # feature.append(sum(pos_score))
+        # feature.append(sum(neg_score))
+        # if pos_score:
+        #     feature.append(pos_score[-1])
+        # else:
+        #     feature.append(0)
+        # if neg_score:
+        #     feature.append(neg_score[-1])
+        # else:
+        #     feature.append(0)
+        bi = bigram[-1]
+        flag = -0.8 if bi[0].endswith("_NEG") and bi[1].endswith("_NEG") else 1
+        bi = (bi[0].replace("_NEG", ""), bi[1].replace("_NEG", ""))
+        if bi in Lexicon:
+            feature.append(Lexicon[bi] * flag)
+        else:
+            feature.append(0)
+    return feature
+
+
+# 将否定词后的4个词加上_NEG后缀
+def reverse_neg(microblog):
+    mtoken = []
+    tokens = list(itertools.chain(*microblog["parsed_text"]["tokens"]))
+    sentence = " ".join(tokens)
+    length = len(tokens)
+
+    index = 0
+    while(index != length):
+        cur_token = tokens[index].lower()
+        mtoken.append(cur_token)
+        if cur_token in set_neg or cur_token.endswith("n't"):
+            for i in range(index + 1, min(length, index + 4)):  # 将否定词后的4个词带上"_NEG"
+                index = i
+                cur_token_1 = tokens[i].lower()
+                if tokens[i] in punc:  # 若遇到标点符号则停止加"_NEG"
+                    mtoken.append(cur_token_1)
+                    break
+                mtoken.append(cur_token_1 + "_NEG")
+        index += 1
+    return mtoken
 
 
 def removeItemsInDict(dict, threshold=1):
@@ -170,6 +397,13 @@ def onehot_vectorize(label, num_class):
     return one_hot
 
 
+def bow_vectorize(sent_dic, num_vocab):
+    bow = np.zeros(num_vocab, dtype=np.float32)
+    for idx, value in sent_dic.items():
+        bow[idx] = value
+    return bow
+
+
 def sent_to_index(sent, word_vocab):
     """
     :param sent:
@@ -213,6 +447,44 @@ def pos_to_index(poses, pos_vocab):
         else:
             pos_index.append(pos_vocab[pos])
     return pos_index
+
+
+def rf_to_dict(sents, rf_vocab, word_vocab):
+    rf_tweet = {}
+    for word in sents:
+        if word not in rf_vocab:
+            tf = 0
+        else:
+            tf = rf_vocab[word]
+        rf_tweet[word] = tf
+    new_feat_dict = {}
+    for word in rf_tweet:
+        if word in word_vocab:
+            new_feat_dict[word_vocab[word]] = rf_tweet[word]
+    return new_feat_dict
+
+
+def rf_to_vector(sents, rf_vocab, word_vocab):
+    rf_tweet = {}
+    for word in sents:
+        if word not in rf_vocab:
+            tf = 0
+        else:
+            tf = rf_vocab[word]
+        rf_tweet[word] = tf
+    new_feat_dict = np.zeros(len(word_vocab), dtype=np.float32)
+    for word in rf_tweet:
+        if word in word_vocab:
+            new_feat_dict[word_vocab[word]] = rf_tweet[word]
+    return new_feat_dict
+
+
+def get_feature_by_feat_dict(dict, feat_dict):
+    new_feat_dict = {}
+    for feat in feat_dict:
+        if feat in dict:
+            new_feat_dict[dict[feat]] = feat_dict[feat]
+    return new_feat_dict
 
 
 def char_to_matrix(sent, char_vocab):
@@ -296,6 +568,15 @@ def pad_3d_tensor(batch_chars, max_sent_length=None, max_word_length=None, dtype
                 kept_length = max_word_length
             padding_chars[i, j, :kept_length] = chars[:kept_length]
     return padding_chars
+
+
+def fill_2d_matrix(batch_f_rf, num_vocab, dtype=np.float32):
+    batch_size = len(batch_f_rf)
+    padding_rf = np.zeros((batch_size, num_vocab), dtype=dtype)
+    for i in range(batch_size):
+        for idx, value in batch_f_rf[i].items():
+            padding_rf[i][idx] = value
+    return padding_rf
 
 
 def build_word_vocab(sents, threshold=1):
@@ -425,7 +706,7 @@ def load_word_embedding(word2index, emb_file, n_dim=300):
     # 未登录词
     oov_word_list = [w for w in word2index if w not in pre_trained]
     print('oov word list example (30): ', oov_word_list[:30])
-    pickle.dump(oov_word_list, open('./oov.p', 'wb'))
+    pickle.dump(oov_word_list, open(config.oov_file, 'wb'))
 
     embeddings = np.array(embeddings, dtype=np.float32)
     return embeddings
@@ -478,3 +759,4 @@ class Batch(object):
         else:
             value = getattr(self, name)
         return value
+

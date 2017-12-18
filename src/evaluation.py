@@ -94,5 +94,5 @@ if __name__ == '__main__':
     overall_accuracy, macro_p, macro_r, macro_f1 = Evaluation( config.dev_gold_file, config.dev_predict_file)
     print('overall_accuracy = {:.5f}, macro_p = {:.5f}, macro_r = {:.5f}, macro_f1 = {:.5f}'.format(overall_accuracy, macro_p, macro_r, macro_f1))
     case_list = case_study(config.dev_gold_file, config.dev_predict_file)
-    print(case_list.head(100))
+    print(case_list.head(10000))
 

@@ -39,12 +39,14 @@ def read_data(file_list):
             sents = data_utils.get_text_unigram(tweet)
             ners = data_utils.get_text_ner(tweet)
             pos = data_utils.get_text_pos(tweet)
+            punction = data_utils.get_text_punction(tweet)
+            senti = data_utils.sentilexi(tweet)
             label = tweet["label"]
             id = 0
             if file == config.train_file:
                 id = tweet["id"]
             text = tweet["cleaned_text"]
-            examples.append((sents, label, ners, pos, id, text))
+            examples.append((sents, label, ners, pos, punction, senti, id, text))
     return examples
 
 
@@ -55,6 +57,7 @@ class Dataset(object):
                  char_vocab,
                  ner_vocab,
                  pos_vocab,
+                 rf_vocab,
                  max_sent_len,
                  max_word_len,
                  num_class):
@@ -63,7 +66,7 @@ class Dataset(object):
         Args: file_list:
               word_vocab:
         """
-
+        self.num_vocab = len(word_vocab)
         examples = read_data(file_list)
         if type == 'train':
             self.examples = examples[:int(0.9*len(examples))]
@@ -84,27 +87,36 @@ class Dataset(object):
             sents = example[0]
             ners = example[2]
             poses = example[3]
+            pun = example[4]
+            senti = example[5]
             char = data_utils.char_to_matrix(sents, char_vocab)
             sent = data_utils.sent_to_index(sents, word_vocab)
             ner = data_utils.ner_to_index(ners, ner_vocab)
             pos = data_utils.pos_to_index(poses, pos_vocab)
+            rf = data_utils.rf_to_dict(sents, rf_vocab, word_vocab)
+
             # 有的句子长度为0, 取平均长度
             if len(sent) == 0:
                 sent = np.ones(8)
-            sent_features.append((sent, char, ner, pos))
+            sent_features.append((sent, char, ner, pos, rf, pun, senti))
             sent_lens.append(min(len(sent), max_sent_len))
         # 这里添加char, ner的特征， 之后再做处理
         f_sents = []
         f_chars = []
         f_ners = []
         f_poses = []
+        f_rf = []
+        f_pun = []
+        f_senti = []
         char_lens = []
         for feature in sent_features:
             f_sents.append(feature[0])
             f_chars.append(feature[1])
             f_ners.append(feature[2])
             f_poses.append(feature[3])
-
+            f_rf.append(feature[4])
+            f_pun.append(feature[5])
+            f_senti.append(feature[6])
         input_x = data_utils.pad_2d_matrix(f_sents, max_sent_len)
         input_x_ner = data_utils.pad_2d_matrix(f_ners, max_sent_len)
         input_x_pos = data_utils.pad_2d_matrix(f_poses, max_sent_len)
@@ -114,11 +126,13 @@ class Dataset(object):
             char_lens.append([min(len(word), max_word_len) for word in input_x_char[i]])
         x_len = sent_lens
         x_char_len = char_lens
-
         self.input_x = np.array(input_x, dtype=np.int32)  # [batch_size, sent_len]
         self.input_x_ner = np.array(input_x_ner, dtype=np.int32)
         self.input_x_pos = np.array(input_x_pos, dtype=np.int32)
         self.input_x_char = np.array(input_x_char, dtype=np.int32)
+        self.input_x_rf = np.array(f_rf)
+        self.input_x_pun = np.array(f_pun, dtype=np.int32)
+        self.input_x_senti = np.array(f_senti, dtype=np.float32)
         self.x_len = np.array(x_len, dtype=np.int32)  # [batch_size]
         self.x_char_len = np.array(x_char_len, dtype=np.int32)
         self.y = np.array(y, dtype=np.float32)  # [batch_size, class_number]
@@ -140,6 +154,9 @@ class Dataset(object):
         input_x_char = self.input_x_char
         input_x_ner = self.input_x_ner
         input_x_pos = self.input_x_pos
+        input_x_pun = self.input_x_pun
+        input_x_senti = self.input_x_senti
+        input_x_rf = self.input_x_rf
         x_len = self.x_len
         x_char_len = self.x_char_len
         y = self.y
@@ -160,9 +177,13 @@ class Dataset(object):
             batch.add('char', input_x_char[excerpt])
             batch.add('ner', input_x_ner[excerpt])
             batch.add('pos', input_x_pos[excerpt])
+            batch.add('rf', data_utils.fill_2d_matrix(input_x_rf[excerpt], self.num_vocab))
+            batch.add('pun', input_x_pun[excerpt])
+            batch.add('senti', input_x_senti[excerpt])
             batch.add('sent_len', x_len[excerpt])
             batch.add('char_len', x_char_len[excerpt])
             batch.add('label', y[excerpt])
+
             yield batch
 
 
@@ -194,7 +215,7 @@ class Task(object):
         self.c2i_file = config.c2i_file
         self.n2i_file = config.n2i_file
         self.p2i_file = config.p2i_file
-
+        self.rf2i_file = config.rf_file
         self.train_predict_file = None
         self.dev_predict_file = None
         self.test_predict_file = None
@@ -215,14 +236,15 @@ class Task(object):
             self.ner_vocab = data_utils.load_params(self.n2i_file)
             self.pos_vocab = data_utils.load_params(self.p2i_file)
             self.embed = self.embed.astype(np.float32)
+        self.rf_vocab = data_utils.load_key_value_dict_from_file(self.rf2i_file)
         self.char_embed = np.array(np.random.uniform(-0.25, 0.25, (len(self.char_vocab), self.char_dim)), dtype=np.float32)
         self.ner_embed = np.array(np.random.uniform(-0.25, 0.25, (len(self.ner_vocab), self.ner_dim)), dtype=np.float32)
         self.pos_embed = np.array(np.random.uniform(-0.25, 0.25, (len(self.pos_vocab), self.pos_dim)), dtype=np.float32)
         print("vocab size: %d" % len(self.word_vocab), "we shape: ", self.embed.shape)
-        self.train_data = Dataset(self.train_file, 'train', self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.max_sent_len, self.max_word_len, self.num_class )
-        self.dev_data = Dataset(self.train_file, 'dev', self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.max_sent_len, self.max_word_len, self.num_class)
+        self.train_data = Dataset(self.train_file, 'train', self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.rf_vocab, self.max_sent_len, self.max_word_len, self.num_class )
+        self.dev_data = Dataset(self.train_file, 'dev', self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.rf_vocab, self.max_sent_len, self.max_word_len, self.num_class)
         if self.test_file:
-            self.test_data = Dataset(self.test_file, self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.max_sent_len, self.max_word_len, self.num_class)
+            self.test_data = Dataset(self.test_file, self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.rf_vocab, self.max_sent_len, self.max_word_len, self.num_class)
 
     def build_vocab(self):
         """

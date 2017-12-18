@@ -73,3 +73,5 @@ import evaluation
 #     d = tf.concat([a, b, c], axis=-1)
 #     print(sess.run(d))
 # print(list(itertools.chain(*list)))
+a = [[1, 2, 3], [4, 5, 6]]
+print(list(itertools.chain(*a)))
