@@ -10,7 +10,29 @@ sh run.sh
 - [x] Padding
 - [x] Mask
 
-## TODO
-- [ ] CNN
+## Done Model
+- [x] NBOW
+- [x] CNN
 - [x] LSTM
-- [ ] Saver
+- [x] RCNN
+
+## Done Model
+- [x] char_embedding
+- [x] pos_embedding
+- [x] ner_embedding
+- [x] attention mechanism
+
+## Done Feature
+- [x] pun
+- [x] senti
+
+## Done Feature
+- [x] Saver
+- [x] Predict
+- [x] Make Feature
+- [x] Ensemble models
+
+## TODO
+- [ ] allcaps feature
+- [ ] hashtag feature
+- [ ] Stacking for single model level
