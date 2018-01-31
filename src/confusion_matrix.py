@@ -79,10 +79,10 @@ class ConfusionMatrix(object):
 
     def get_matrix(self):
         num_classes = self.alphabet.size()
-        #header for the confusion matrix
+        # header for the confusion matrix
         header = [' '] + [self.alphabet.get_label(i) for i in range(num_classes)]
         rows = []
-        #putting labels to the first column of rhw matrix
+        # putting labels to the first column of rhw matrix
         for i in range(num_classes):
             row = [self.alphabet.get_label(i)] + [str(self.matrix[i,j]) for j in range(num_classes)]
             rows.append(row)
@@ -116,10 +116,10 @@ class ConfusionMatrix(object):
                 f1[i] = 0
             correct += self.matrix[i,i]
             label = self.alphabet.get_label(i)
-            lines.append( '%s \tprecision %f \trecall %f\t F1 %f \t%s' %\
+            lines.append('%s \tprecision %f \trecall %f\t F1 %f \t%s' %\
                     (i, precision[i], recall[i], f1[i], label))
-        lines.append( '* Overall accuracy rate = %f' %(correct / sum(sum(self.matrix[:,:]))))
-        lines.append( '* Macro precision %f \t recall %f\t F1 %f' %\
+        lines.append('* Overall accuracy rate = %f' %(correct / sum(sum(self.matrix[:,:]))))
+        lines.append('* Macro precision %f \t recall %f\t F1 %f' %\
             (numpy.mean(precision), numpy.mean(recall), numpy.mean(f1)))
         print('\n'.join(lines))
 
@@ -183,8 +183,21 @@ class ConfusionMatrix(object):
         lines = []
         # computing precision, recall, and f1
         for i in range(self.alphabet.size()):
-            precision[i] = self.matrix[i,i] / sum(self.matrix[i,:])
-            recall[i] = self.matrix[i,i] / sum(self.matrix[:,i])
+            if sum(self.matrix[i,:]) == 0:
+                precision[i] = 0
+            else:
+                precision[i] = self.matrix[i,i] / sum(self.matrix[i,:])
+            if sum(self.matrix[:, i]) == 0:
+                recall[i] == 0
+            else:
+                recall[i] = self.matrix[i, i] / sum(self.matrix[:, i])
+            # print(i)
+            # print('-----------')
+            # print(self.matrix[i, i])
+            # print('-----------')
+            # print(sum(self.matrix[:, i]))
+            # print('-----------')
+            # print(recall[i])
             if precision[i] + recall[i] != 0:
                 f1[i] = 2 * precision[i] * recall[i] / (precision[i] + recall[i])
             else:
@@ -201,8 +214,14 @@ class ConfusionMatrix(object):
         lines = []
         # computing precision, recall, and f1
         for i in range(self.alphabet.size()):
-            precision[i] = self.matrix[i,i] / sum(self.matrix[i,:])
-            recall[i] = self.matrix[i,i] / sum(self.matrix[:,i])
+            if sum(self.matrix[i,:]) == 0:
+                precision[i] = 0
+            else:
+                precision[i] = self.matrix[i,i] / sum(self.matrix[i,:])
+            if sum(self.matrix[:, i]) == 0:
+                recall[i] == 0
+            else:
+                recall[i] = self.matrix[i, i] / sum(self.matrix[:, i])
             if precision[i] + recall[i] != 0:
                 f1[i] = 2 * precision[i] * recall[i] / (precision[i] + recall[i])
             else:

@@ -1,4 +1,4 @@
-# coding:utf8
+# -*- coding:utf-8 -*-
 """
 @author rgtjf
 
@@ -19,6 +19,7 @@
 ==============
 Version 1.0
 """
+
 from __future__ import print_function
 
 import time
@@ -33,6 +34,8 @@ import os
 import pickle
 import six
 import re
+import codecs
+
 
 def fn_timer(function):
     @wraps(function)
@@ -179,7 +182,7 @@ def word2index(word_list):
 
 
 def pos2tag(pos):
-    if pos   in ['NN', 'NNS', 'NNP', 'NNPS']:
+    if pos in ['NN', 'NNS', 'NNP', 'NNPS']:
         pos = 'n'
     elif pos in ['VB', 'VBD', 'VBG', 'VBN', 'VBP', 'VBZ']:
         pos = 'v'
@@ -683,7 +686,7 @@ class Segmenter:
         return self.dictionary.get(word, 0) / self.total
 
     def __init__(self, dictionary):
-        self.dictionary = pickle.load(open(dictionary))
+        self.dictionary = pickle.load(codecs.open(dictionary))
         self.maxWordLength = max(map(len, self.dictionary))
         self.total = float(sum(self.dictionary.values()))
 
@@ -704,3 +707,5 @@ class Segmenter:
         words.reverse()
         str_ = " ".join(words)
         return str_
+
+

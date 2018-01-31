@@ -1,4 +1,4 @@
-# coding: utf8
+# coding: utf-8
 from __future__ import print_function
 
 import os
@@ -13,12 +13,13 @@ class NBoWModel(object):
     def __init__(self, FLAGS=None):
         self.FLAGS = FLAGS
         self.config = config
-
+        self.epoch_step = tf.Variable(0, trainable=False, name="Epoch_Step")
+        self.epoch_increment = tf.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
         self.seq_len = config.max_sent_len
         self.embed_size = config.word_dim
         self.num_class = config.num_class
-        self.lstm_size = 100
-
+        self.mlp_h1_size = 140
+        self.mlp_h2_size = 140
 
         # Add PlaceHolder
         self.input_x = tf.placeholder(tf.int32, (None, self.seq_len))  # [batch_size, sent_len]
@@ -26,6 +27,8 @@ class NBoWModel(object):
         self.input_y = tf.placeholder(tf.int32, (None, self.num_class))
 
         self.drop_keep_rate = tf.placeholder(tf.float32)
+        self.drop_hidden1 = tf.placeholder(tf.float32)
+        self.drop_hidden2 = tf.placeholder(tf.float32)
         self.learning_rate = tf.placeholder(tf.float32)
 
         # Add Word Embedding
@@ -34,7 +37,12 @@ class NBoWModel(object):
         # Build the Computation Graph
         inputs = tf.nn.embedding_lookup(self.we, self.input_x)  # [batch_size, sent_len, emd_size]
         avg_pooling = tf_utils.AvgPooling(inputs, self.input_x_len, self.seq_len)
-        logits = tf_utils.linear(avg_pooling, self.num_class, bias=True, scope='softmax')
+        hidden1 = tf.nn.relu(tf_utils.linear(avg_pooling, self.mlp_h1_size, bias=True, scope='h1'))
+        hidden1_drop = tf.nn.dropout(hidden1, keep_prob=self.drop_hidden1)
+        hidden2 = tf.nn.relu(tf_utils.linear(hidden1_drop, self.mlp_h2_size, bias=True, scope='h2'))
+        hidden2_drop = tf.nn.dropout(hidden2, keep_prob=self.drop_hidden2)
+        logits = tf_utils.linear(hidden2_drop, self.num_class, bias=True, scope='softmax')
+        # logits = tf_utils.linear(avg_pooling, self.num_class, bias=True, scope='softmax')
 
         # Obtain the Predict, Loss, Train_op
         predict_prob = tf.nn.softmax(logits, name='predict_prob')
@@ -60,18 +68,21 @@ class NBoWModel(object):
 
         self.predict_prob = predict_prob
         self.predict_label = predict_label
+        self.seq_res = hidden2_drop
+        self.logits = logits
         self.loss = loss
         self.reg_loss = reg_loss
         self.train_op = train_op
         self.global_step = global_step
 
     def train_model(self, sess, batch):
-        sent_feature = batch.sent
         feed_dict = {
             self.input_x: batch.sent,
             self.input_x_len: batch.sent_len,
             self.input_y: batch.label,
             self.drop_keep_rate: self.FLAGS.drop_keep_rate,
+            self.drop_hidden1: 1.0,
+            self.drop_hidden2: 1.0,
             self.learning_rate: 1e-3
         }
         to_return = {
@@ -81,11 +92,29 @@ class NBoWModel(object):
         }
         return sess.run(to_return, feed_dict)
 
+    def make_feature(self, sess, batch):
+        feed_dict = {
+            self.input_x: batch.sent,
+            self.input_x_len: batch.sent_len,
+            self.drop_keep_rate: 1.0,
+            self.drop_hidden1: 1.0,
+            self.drop_hidden2: 1.0,
+        }
+        to_return = {
+            'seq_res': self.seq_res,
+            'logits': self.logits,
+            'predict_label': self.predict_label,
+            'predict_prob': self.predict_prob
+        }
+        return sess.run(to_return, feed_dict)
+
     def test_model(self, sess, batch):
         feed_dict = {
             self.input_x: batch.sent,
             self.input_x_len: batch.sent_len,
-            self.drop_keep_rate: 1.0
+            self.drop_keep_rate: 1.0,
+            self.drop_hidden1: 1.0,
+            self.drop_hidden2: 1.0,
         }
         to_return = {
             'predict_label': self.predict_label,

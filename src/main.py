@@ -22,25 +22,32 @@ tf.flags.DEFINE_string('log_file', 'tf-classification.log', 'path of the log fil
 tf.flags.DEFINE_string('embed', 'SWM', 'word_embedding')
 # Task Parameters
 tf.flags.DEFINE_string('model', 'lstm', 'given the model name')
-tf.flags.DEFINE_integer('max_epoch', 10, 'max epoches')
+tf.flags.DEFINE_integer('max_epoch', 30, 'max epoches')
 tf.flags.DEFINE_integer('display_step', 100, 'display each step')
 tf.flags.DEFINE_integer('layer_size', 1, 'layer size')
-tf.flags.DEFINE_integer('threshold', 1, 'threshold')
+tf.flags.DEFINE_integer('num_filters', 128, 'num_filters')
+tf.flags.DEFINE_integer('threshold', 5, 'threshold')
 # Hyper Parameters
 tf.flags.DEFINE_integer('batch_size', 256, 'batch size')
 tf.flags.DEFINE_float('drop_keep_rate', 0.9, 'dropout_keep_rate')
 tf.flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 tf.flags.DEFINE_float('lambda_l2', 1e-6, 'lambda_l2')
 tf.flags.DEFINE_float('clipper', 30, 'clipper')
-tf.flags.DEFINE_bool('init', True, 'build_vocab')
-tf.flags.DEFINE_bool('with_char', True, 'char_embedding')
-tf.flags.DEFINE_bool('with_ner', True, 'ner_embedding')
-tf.flags.DEFINE_bool('with_pos', True, 'pos_embedding')
-tf.flags.DEFINE_bool('with_rf', True, 'rf_features')
-tf.flags.DEFINE_bool('with_pun', True, 'punction_features')
-tf.flags.DEFINE_bool('with_senti', True, 'sentilexi')
-tf.flags.DEFINE_bool('with_attention', True, 'word_attention')
+tf.flags.DEFINE_bool('init', False, 'build_vocab')
+tf.flags.DEFINE_bool('isTrain', True, 'training')
+tf.flags.DEFINE_bool('with_char', False, 'char_embedding')
+tf.flags.DEFINE_string('char_type', 'cnn', 'char type')
+tf.flags.DEFINE_bool('with_ner', False, 'ner_embedding')
+tf.flags.DEFINE_bool('with_pos', False, 'pos_embedding')
+tf.flags.DEFINE_bool('with_rf', False, 'rf_features')
+tf.flags.DEFINE_bool('with_pun', False, 'punction_features')
+tf.flags.DEFINE_bool('with_senti', False, 'sentilexi')
+tf.flags.DEFINE_bool('with_attention', False, 'word_attention')
+tf.flags.DEFINE_bool('with_cnn', False, 'cnn_features')
+tf.flags.DEFINE_bool('with_cnn_lstm', False, 'cnn_features_hidden')
+tf.flags.DEFINE_string("ckpt_dir", config.dev_model_file, "checkpoint location for the model")
 FLAGS._parse_flags()
+
 
 # Logger Part
 logger = utils.get_logger(FLAGS.log_file)
@@ -68,16 +75,20 @@ def main():
 
     best_macro_f1 = 0.
     best_dev_result = []
-    best_test_acc = 0.
+    # best_test_macro_f1 = 0.
     best_test_result = []
     with tf.Session(config=gpu_config) as sess:
-        init = tf.global_variables_initializer()
-        sess.run(init)
-
+        saver = tf.train.Saver(max_to_keep=1)
+        if os.path.exists(FLAGS.ckpt_dir + "checkpoint"):
+            print("Restoring Variables from Checkpoint")
+            saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
+        else:
+            init = tf.global_variables_initializer()
+            sess.run(init)
         total_batch = 0
-        # saver = tf.train.Saver()
         early_stop = 0
-        for epoch in range(FLAGS.max_epoch):
+        curr_epoch = sess.run(model.epoch_step)
+        for epoch in range(curr_epoch, FLAGS.max_epoch):
             for batch in task.train_data.batch_iter(FLAGS.batch_size, shuffle=True):
                 total_batch += 1
                 results = model.train_model(sess, batch)
@@ -102,29 +113,40 @@ def main():
                 return macro_f1, preds
 
             macro_f1, dev_result = do_eval(task.dev_data)
-            # test_acc = do_eval(task.test_data)
+            test_macro_f1, test_result = do_eval(task.test_data)
             logger.info(
-                # 'dev = {:.5f}, test = {:.5f}'.format(dev_acc, test_acc)
-                'dev = {:.5f}'.format(macro_f1)
+                'dev = {:.5f}, test = {:.5f}'.format(macro_f1, test_macro_f1),
+                # 'dev = {:.5f}'.format(macro_f1)
             )
 
             if macro_f1 > best_macro_f1:
                 best_macro_f1 = macro_f1
                 best_dev_result = dev_result
-                # saver.save(sess, config.dev_model_file, epoch)
-                # best_test_acc = test_acc
+                best_test_result = test_result
+                saver.save(sess, FLAGS.ckpt_dir+'model.ckpt', epoch)
+                print("Model saved.")
                 logger.info(
-                    # 'dev = {:.5f}, test = {:.5f} best!!!!'.format(best_dev_acc, best_test_acc)
-                    'dev = {:.5f} best!!!!'.format(best_macro_f1)
+                    'dev = {:.5f} best!!!!, test = {:.5f}'.format(best_macro_f1, test_macro_f1)
+                    # 'dev = {:.5f} best!!!!'.format(best_macro_f1)
                 )
+                early_stop = 0
             else:
                 early_stop += 1
-
+            # if test_macro_f1 > best_test_macro_f1:
+            #     best_test_macro_f1 = test_macro_f1
+            #     best_test_result = test_result
+            #     logger.info(
+            #         'dev = {:.5f}, test = {:.5f} best!!!!'.format(macro_f1, best_test_macro_f1)
+            #         # 'dev = {:.5f} best!!!!'.format(best_macro_f1)
+            #     )
             if early_stop >= 5:
                 break
-
+            sess.run(model.epoch_increment)
         with open(config.dev_predict_file, 'w') as f:
             for label in best_dev_result:
+                f.write(str(int(label))+"\n")
+        with open(config.test_predict_file, 'w') as f:
+            for label in best_test_result:
                 f.write(str(int(label))+"\n")
 
 

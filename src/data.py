@@ -2,30 +2,29 @@
 from __future__ import print_function
 import data_utils
 import config
-import os
-import pickle
-import codecs
-import six
 import numpy as np
+import codecs
 np.random.seed(1234)
-# def read_data(file_list):
-#     """
-#     load data from file list
-#     Args: file_list:
-#     Returns:
-#     """
-    # if type(file_list) != list:
-    #     file_list = [file_list]
-    #
-    # examples = []
-    # for file in file_list:
-    #     with codecs.open(file, 'r', encoding='utf8') as f:
-    #         for line in f:
-    #             items = line.strip().split('\t')
-    #             label = items[0]
-    #             sent = items[1].split()
-    #             examples.append((sent, label))
-    # return examples
+
+
+def read_es_data(file_list):
+    """
+    load data from file list
+    Args: file_list:
+    Returns:
+    """
+    if type(file_list) != list:
+        file_list = [file_list]
+
+    examples = []
+    for file in file_list:
+        with codecs.open(file, 'r', encoding='utf8') as f:
+            for line in f:
+                items = line.strip().split('\t')
+                label = items[0]
+                sent = items[1].split()
+                examples.append((sent, label))
+    return examples
 
 
 def read_data(file_list):
@@ -37,21 +36,22 @@ def read_data(file_list):
         for tweet in tweets:
             # add the feature
             sents = data_utils.get_text_unigram(tweet)
+            lemmas = data_utils.get_text_lemmas(tweet)
             ners = data_utils.get_text_ner(tweet)
             pos = data_utils.get_text_pos(tweet)
             punction = data_utils.get_text_punction(tweet)
             senti = data_utils.sentilexi(tweet)
             label = tweet["label"]
             id = 0
-            if file == config.train_file:
-                id = tweet["id"]
+            # if file == config.train_file:
+            #     id = tweet["id"]
             text = tweet["cleaned_text"]
-            examples.append((sents, label, ners, pos, punction, senti, id, text))
+            examples.append((sents, label, ners, pos, punction, senti, lemmas, id, text))
     return examples
 
 
 class Dataset(object):
-    def __init__(self, file_list,
+    def __init__(self, examples,
                  type,
                  word_vocab,
                  char_vocab,
@@ -67,19 +67,24 @@ class Dataset(object):
               word_vocab:
         """
         self.num_vocab = len(word_vocab)
-        examples = read_data(file_list)
-        if type == 'train':
-            self.examples = examples[:int(0.9*len(examples))]
-        elif type == 'dev':
-            self.examples = examples[int(0.9*len(examples)):]
-        else:
-            self.examples = examples
-        examples = self.examples
+        # examples = read_data(file_list)
+        # np.random.shuffle(examples)
+        # if type == 'train':
+        #     self.examples = examples[:int(0.9*len(examples))]
+        # elif type == 'dev':
+        #     print("dev")
+        #     self.examples = examples[int(0.9*len(examples)):]
+        #     data_utils.cout_distribution(self.examples)
+        # else:
+        self.examples = examples
+        # examples = self.examples
         y = []
+        ids = []
         for example in examples:
             label = int(example[1])
             one_hot_label = data_utils.onehot_vectorize(label, num_class)
             y.append(one_hot_label)
+            ids.append(example[7])
         #
         sent_features = []
         sent_lens = []
@@ -89,7 +94,8 @@ class Dataset(object):
             poses = example[3]
             pun = example[4]
             senti = example[5]
-            char = data_utils.char_to_matrix(sents, char_vocab)
+            lemmas = example[6]
+            char = data_utils.char_to_matrix(lemmas, char_vocab)
             sent = data_utils.sent_to_index(sents, word_vocab)
             ner = data_utils.ner_to_index(ners, ner_vocab)
             pos = data_utils.pos_to_index(poses, pos_vocab)
@@ -136,6 +142,7 @@ class Dataset(object):
         self.x_len = np.array(x_len, dtype=np.int32)  # [batch_size]
         self.x_char_len = np.array(x_char_len, dtype=np.int32)
         self.y = np.array(y, dtype=np.float32)  # [batch_size, class_number]
+        self.ids = np.array(ids, dtype=np.float32)
 
     def batch_iter(self, batch_size, shuffle=False):
         """
@@ -160,6 +167,7 @@ class Dataset(object):
         x_len = self.x_len
         x_char_len = self.x_char_len
         y = self.y
+        ids = self.ids
         assert len(input_x) == len(y)
         n_data = len(y)
 
@@ -183,7 +191,7 @@ class Dataset(object):
             batch.add('sent_len', x_len[excerpt])
             batch.add('char_len', x_char_len[excerpt])
             batch.add('label', y[excerpt])
-
+            batch.add('ids', ids[excerpt])
             yield batch
 
 
@@ -192,15 +200,17 @@ class Task(object):
     def __init__(self, init=False, FLAGS=None):
         self.FLAGS = FLAGS
         self.train_file = config.train_file
-        self.dev_file = config.dev_file
+        self.dev_file = config.dev_new_file
         # 测试集之后添加
-        self.test_file = None
+        self.test_file = config.test_file_final
         if FLAGS.embed == "SWM":
             self.word_embed_file = config.word_embed_SWM
         elif FLAGS.embed == "google":
             self.word_embed_file = config.word_embed_google
         elif FLAGS.embed == 'w2v':
             self.word_embed_file = config.word_embed_w2v
+        elif FLAGS.embed == 'glove':
+            self.word_embed_file = config.word_embed_glove
         self.word_dim = config.word_dim
         self.char_dim = config.char_dim
         self.ner_dim = config.ner_dim
@@ -241,10 +251,20 @@ class Task(object):
         self.ner_embed = np.array(np.random.uniform(-0.25, 0.25, (len(self.ner_vocab), self.ner_dim)), dtype=np.float32)
         self.pos_embed = np.array(np.random.uniform(-0.25, 0.25, (len(self.pos_vocab), self.pos_dim)), dtype=np.float32)
         print("vocab size: %d" % len(self.word_vocab), "we shape: ", self.embed.shape)
-        self.train_data = Dataset(self.train_file, 'train', self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.rf_vocab, self.max_sent_len, self.max_word_len, self.num_class )
-        self.dev_data = Dataset(self.train_file, 'dev', self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.rf_vocab, self.max_sent_len, self.max_word_len, self.num_class)
+        # examples = read_data(self.train_file)
+        # np.random.shuffle(examples)
+        # examples_train = examples[:int(0.9*len(examples))]
+        # print(examples_train[0][0])
+        # examples_dev = examples[int(0.9*len(examples)):]
+        # print(examples_dev[0][0])
+        examples_train = read_data(self.train_file)
+        examples_dev = read_data(self.dev_file)
+        data_utils.cout_distribution(examples_dev)
+        examples_test = read_data(self.test_file)
+        self.train_data = Dataset(examples_train, 'none', self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.rf_vocab, self.max_sent_len, self.max_word_len, self.num_class )
+        self.dev_data = Dataset(examples_dev, 'dev', self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.rf_vocab, self.max_sent_len, self.max_word_len, self.num_class)
         if self.test_file:
-            self.test_data = Dataset(self.test_file, self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.rf_vocab, self.max_sent_len, self.max_word_len, self.num_class)
+            self.test_data = Dataset(examples_test, 'none', self.word_vocab, self.char_vocab, self.ner_vocab, self.pos_vocab, self.rf_vocab, self.max_sent_len, self.max_word_len, self.num_class)
 
     def build_vocab(self):
         """
@@ -262,18 +282,20 @@ class Task(object):
         sents = []
         ners = []
         poses = []
+        lemmas = []
         for example in examples:
             sent = example[0]
             ner = example[2]
             pos = example[3]
+            lemma = example[6]
             sents.append(sent)
             ners.append(ner)
             poses.append(pos)
-
+            lemmas.append(lemma)
         word_vocab = data_utils.build_word_vocab(sents, self.threshold)
         ner_vocab = data_utils.build_ner_vocab(ners)
         pos_vocab = data_utils.build_pos_vocab(poses)
-        char_vocab = data_utils.build_char_vocab(sents)
+        char_vocab = data_utils.build_char_vocab(lemmas)
 
         # 统计平均长度与最大长度
         max_sent_len = 0
@@ -285,6 +307,19 @@ class Task(object):
         avg_sent_len /= len(sents)
         print('task: max_sent_len: {}'.format(max_sent_len))
         print('task: avg_sent_len: {}'.format(avg_sent_len))
+        max_word_len = 0
+        avg_word_len = 0
+        total_len = 0
+        for sent in sents:
+            for word in sent:
+                word = list(word)
+                if len(word) > max_word_len:
+                    max_word_len = len(word)
+                avg_word_len += len(word)
+            total_len += len(sent)
+        avg_word_len /= total_len
+        print('task: max_word_len: {}'.format(max_word_len))
+        print('task: avg_word_len: {}'.format(avg_word_len))
         return word_vocab, char_vocab, ner_vocab, pos_vocab
 
 

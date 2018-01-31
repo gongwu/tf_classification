@@ -8,6 +8,7 @@ import itertools
 import utils
 import config
 import nltk
+from collections import Counter
 from dict_loader import Dict_loader
 
 
@@ -32,7 +33,16 @@ def set_dict_key_value(dict, key):
 def get_text_unigram(microblog):
     tokens = microblog["parsed_text"]["tokens"]  # clean_text做预处理得到的分词结果
     ners = microblog["parsed_text"]["ners"]
-    wanted_tokens = _process_ngram_tokens(tokens, ners)  # 去掉各种number及长度小于2的词
+    pos = microblog["parsed_text"]["pos"]
+    wanted_tokens = _process_ngram_tokens(tokens, pos, ners)  # 去掉各种number及长度小于2的词
+    return list(itertools.chain(*wanted_tokens))
+
+
+def get_text_lemmas(microblog):
+    tokens = microblog["parsed_text"]["lemmas"]  # clean_text做预处理得到的分词结果
+    ners = microblog["parsed_text"]["ners"]
+    pos = microblog["parsed_text"]["pos"]
+    wanted_tokens = _process_ngram_tokens(tokens, pos, ners)  # 去掉各种number及长度小于2的词
     return list(itertools.chain(*wanted_tokens))
 
 
@@ -279,18 +289,22 @@ def removeItemsInDict(dict, threshold=1):
     return dict
 
 
-def _process_ngram_tokens(tokens, ners):
+def _process_ngram_tokens(tokens, pos, ners):
     wanted_tokens = []
-    for sent_words, sent_ners in zip(tokens, ners):
+    for sent_words, sent_pos, sent_ners in zip(tokens, pos, ners):
         wanted_sent_words = []
-        for word, ner in zip(sent_words, sent_ners):
+        for word, pos, ner in zip(sent_words, sent_pos, sent_ners):
             # 去掉各种number
-            # if ner in ["DATE", "NUMBER", "MONEY", "PERCENT"]:
+            if ner in ["DATE", "NUMBER", "MONEY", "PERCENT"]:
+                # word = ner
+                continue
+            # if utils.pos2tag(pos) == "#":
             #     continue
             # 将包含数字和单词的token替换成NUMBER_WORD
             if re.search("([0-9]*\.?[0-9]+)", word):
-                continue
                 # word = "NUMBER_WORD"
+                continue
+
             # 去掉hashtag变小写
             # while word.startswith("#"):
             #     word = word[1:].lower()
@@ -301,13 +315,8 @@ def _process_ngram_tokens(tokens, ners):
                 tag = 1
             if tag == 1:
                 if len(word) >= 2:
-                    token1 = []
-                    token2 = []
-                    token1 += Segmenter.get(word)  # 对hashtag进行分词
-                    for word_ in token1:
-                        if len(word_) >= 2:
-                            token2.append(word_)
-                    wanted_sent_words += token2
+                    words = hashtagSegment(word)
+                    wanted_sent_words += words
                     continue
                 else:
                     continue
@@ -316,6 +325,9 @@ def _process_ngram_tokens(tokens, ners):
             punctuations = ["@", "'", ":", ";", "?", "!", "=", "_", "^", "*", "-", ".", "`"]
             for punctuation in punctuations:
                 if word.startswith(punctuation):
+                #     word = word[1:].lower()
+                # elif word.endswith(punctuation):
+                #     word = word[:-1].lower()
                     tag = 1
                     break
             if tag == 1:
@@ -323,12 +335,21 @@ def _process_ngram_tokens(tokens, ners):
             if word.strip() == "":
                 continue
             # 去掉长度小于2的词
-            # if len(word) < 2:
-            #     continue
+            if len(word) < 2:
+                continue
             word = word.lower()
             wanted_sent_words.append(word)
         wanted_tokens.append(wanted_sent_words)
     return wanted_tokens
+
+
+def hashtagSegment(word):
+    token2 = []
+    token1 = (Segmenter.get(word)).split(" ")  # 对hashtag进行分词
+    for word_ in token1:
+        if len(word_) >= 2:
+            token2.append(word_)
+    return token2
 
 
 def save_params(params, fname):
@@ -760,3 +781,55 @@ class Batch(object):
             value = getattr(self, name)
         return value
 
+
+def read_pure_data(file_list):
+    if type(file_list) != list:
+        file_list = [file_list]
+    examples = []
+    for file in file_list:
+        tweets = load_tweets(file)
+        for tweet in tweets:
+            sents = get_text_unigram(tweet)
+            label = tweet["label"]
+            examples.append((label, sents))
+    return examples
+
+
+def cout_distribution(examples):
+    label_count = np.zeros(20)
+    for example in examples:
+        label_count[int(example[1])] += 1
+    sum = np.sum(label_count)
+    for i in label_count:
+        print(i / sum * 100), "%", " ", i
+
+
+def create_top_key():
+    examples = read_pure_data(config.train_file)
+    data_dict = {}
+    for example in examples:
+        if int(example[0]) not in data_dict:
+            data_dict[int(example[0])] = example[1]
+        else:
+            data_dict[int(example[0])].extend(example[1])
+
+    stop_word = []
+    with open(config.STOP_WORD_PATH, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            line = line.strip('\n')
+            stop_word.append(line)
+
+    with open(config.top_key_file, 'w') as f:
+        for key in data_dict.keys():
+            data_dict[key] = sorted(dict(Counter(data_dict[key])).items(), key=lambda d: d[1], reverse=True)
+            top_key = []
+            for value in data_dict[key]:
+                if value[0] not in stop_word:
+                    top_key.append(value)
+                    if len(top_key) == 200:
+                        break
+            f.write(str(key) + "\t")
+            for word in top_key:
+                f.write(word[0] + '\t')
+            f.write('\n')

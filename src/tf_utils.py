@@ -57,10 +57,18 @@ def AvgPooling(input_x, input_len, max_input_len):
     Returns:
         [batch, sent_embedding]
     """
+
     mask = tf.sequence_mask(input_len, max_input_len, dtype=tf.float32)
     norm = mask / (tf.reduce_sum(mask, -1, keep_dims=True) + 1e-30)
     output = tf.reduce_sum(input_x * tf.expand_dims(norm, -1), axis=1)
     return output
+
+
+def Mask(input_x, input_len, max_input_len):
+    mask = tf.sequence_mask(input_len, max_input_len, dtype=tf.float32)
+    norm = mask / (tf.reduce_sum(mask, -1, keep_dims=True) + 1e-30)
+    norm_mask = input_x * tf.expand_dims(norm, -1)
+    return norm_mask
 
 
 def MaxPooling(input_x, input_lengths):

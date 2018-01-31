@@ -9,12 +9,12 @@ DICT_LABEL_TO_INDEX = {"_red_heart_": 0, "_smiling_face_with_hearteyes_": 1, "_f
                "_purple_heart_": 13, "_winking_face_": 14, "_hundred_points_": 15, "_beaming_face_with_smiling_eyes_": 16,
                "_Christmas_tree_": 17, "_camera_with_flash_": 18, "_winking_face_with_tongue_": 19}
 
-DICT_INDEX_TO_LABEL = {index:label for label, index in DICT_LABEL_TO_INDEX.items()}
+DICT_INDEX_TO_LABEL = {index: label for label, index in DICT_LABEL_TO_INDEX.items()}
 
 
 def confusion_matrix(gold, pred):
     labels = sorted(set(list(gold) + list(pred)), reverse=False)
-    line_0 = ["%4d" % t for t in labels]
+    line_0 = ["%5d" % t for t in labels]
     print("Gold\\Pred\t| " + " \t".join(line_0))
 
     for cur in labels:
@@ -22,15 +22,15 @@ def confusion_matrix(gold, pred):
         for i in range(len(gold)):
             if gold[i] != cur: continue
             count[pred[i]] += 1
-        count = ["%4d" % (count[l]) for l in labels]
-        print("\t%4d\t| " % cur + " \t".join(count))
+        count = ["%5d" % (count[l]) for l in labels]
+        print("\t%5d\t| " % cur + " \t".join(count))
 
 
 
 def Evaluation(gold_file_path, predict_file_path):
     with open(gold_file_path) as gold_file, open(predict_file_path) as predict_file:
         gold_list = [int(line.strip().split('\t')[0]) for line in gold_file]
-        predicted_list = [int(line.strip().split("\t#\t")[0]) for line in predict_file]
+        predicted_list = [int(line.strip().split("\t")[0]) for line in predict_file]
         predict_labels = [config.id2category[int(predict)] for predict in predicted_list]
         gold_labels = [config.id2category[int(gold)] for gold in gold_list]
         binary_alphabet = Alphabet()
@@ -78,21 +78,22 @@ def case_study(gold_file_path, predict_file_path):
         for line in gold_file:
             gold_list.append([int(line.strip().split('\t')[0]), line.strip().split('\t')[1]])
         # gold_list = [int(line.strip().split('\t')[0]) for line in gold_file]
-        predicted_list = [int(line.strip().split("\t#\t")[0]) for line in predict_file]
+        predicted_list = [int(line.strip().split("\t")[0]) for line in predict_file]
         error_list = []
         for i in range(len(gold_list)):
             if gold_list[i][0] != predicted_list[i]:
                 error_list.append(i)
         case_list = []
         for i in error_list:
-            case_list.append({'gold': gold_list[i][0],  'content': gold_list[i][1], 'predicted': predicted_list[i]})
+            case_list.append({'gold': DICT_INDEX_TO_LABEL[gold_list[i][0]]+" "+str(gold_list[i][0]),  'content': gold_list[i][1], 'predicted': DICT_INDEX_TO_LABEL[predicted_list[i]]+" "+str(predicted_list[i])})
         case_data = pd.DataFrame(case_list)
         return case_data
 
 
 if __name__ == '__main__':
-    overall_accuracy, macro_p, macro_r, macro_f1 = Evaluation( config.dev_gold_file, config.dev_predict_file)
+    overall_accuracy, macro_p, macro_r, macro_f1 = Evaluation(config.dev_gold_new_file, config.dev_predict_file)
     print('overall_accuracy = {:.5f}, macro_p = {:.5f}, macro_r = {:.5f}, macro_f1 = {:.5f}'.format(overall_accuracy, macro_p, macro_r, macro_f1))
-    case_list = case_study(config.dev_gold_file, config.dev_predict_file)
+    case_list = case_study(config.dev_gold_final_file, config.dev_predict_file)
+    pd.set_option('display.width', 1000)
     print(case_list.head(10000))
 
