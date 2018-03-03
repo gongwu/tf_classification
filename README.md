@@ -26,7 +26,7 @@ sh run.sh
 - [x] pun
 - [x] senti
 
-## Done Feature
+## Done Model
 - [x] Saver
 - [x] Predict
 - [x] Make Feature
