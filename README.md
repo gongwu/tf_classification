@@ -1,38 +1,33 @@
-# tf-classification
 
-## Run
-```
-sh run.sh
-```
+-  [Project architecture](#project-architecture)
+-  [Model architecture](#model-architecture)
+    - [NBoW](#NBoW)
+    - [CNN](#CNN)
+    - [LSTM](#LSTM)
 
-## Done
-- [x] Load Word Embedding
-- [x] Padding
-- [x] Mask
 
-## Done Model
-- [x] NBOW
-- [x] CNN
-- [x] LSTM
-- [x] RCNN
+Project architecture
+--------------
 
-## Done Model
-- [x] char_embedding
-- [x] pos_embedding
-- [x] ner_embedding
-- [x] attention mechanism
+<div align="center">
 
-## Done Feature
-- [x] pun
-- [x] senti
+<img align="center" hight="600" width="600" src="https://github.com/gongwu/EmojisPrediction/blob/master/figures/diagram.png">
 
-## Done Model
-- [x] Saver
-- [x] Predict
-- [x] Make Feature
-- [x] Ensemble models
+</div>
 
-## TODO
-- [ ] allcaps feature
-- [ ] hashtag feature
-- [ ] Stacking for single model level
+Model architecture
+--------------
+NBow
+<div align="center">
+<img align="center" hight="100%" width="100%" src="https://github.com/gongwu/EmojisPrediction/blob/master/figures/nbow.png">
+</div>
+
+CNN
+<div align="center">
+<img align="center" hight="100%" width="100%" src="https://github.com/gongwu/EmojisPrediction/blob/master/figures/cnn.png">
+</div>
+
+LSTM
+<div align="center">
+<img align="center" hight="100%" width="100%" src="https://github.com/gongwu/EmojisPrediction/blob/master/figures/lstm.png">
+</div>
